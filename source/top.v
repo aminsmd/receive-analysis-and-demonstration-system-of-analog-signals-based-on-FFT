@@ -21,6 +21,7 @@
 module top(
     input clk,
     input rx,
+	 input ch,
 	 	 //fifo
 
 	 output full,
@@ -46,7 +47,7 @@ wire RxD_data_ready;
 reg rd_en=0;
 
  
-async_receiver # (.Baud(5760)) uart_rec (
+async_receiver # (.Baud(115200)) uart_rec (
     .clk(clk), 
     .RxD(rx), 
     .RxD_data_ready(RxD_data_ready), 
@@ -54,45 +55,6 @@ async_receiver # (.Baud(5760)) uart_rec (
     .RxD_idle(), 
     .RxD_endofpacket()
     );
-
-//reg [10:0] cnt2 =0;
-//always @(posedge CLK_OUT1)
-//begin
-//	cnt2 = cnt2 + 1;
-//	if(cnt2 == 2047)
-//		cnt2=0;
-//end
-//wire [7:0] douttest;
-//ram_single_port test_tam (
-//.clka(CLK_OUT1), // input clka
-//.wea(0), // input [0 : 0] wea
-//.addra(cnt2), // input [10 : 0] addra
-//.dina(dina), // input [7 : 0] dina
-//.douta(douttest) // output [7 : 0] douta
-//);
-
-
-//first fifo
-
-	
-//always @(posedge clk)
-//	data_tx<=data_rx;
-//reg [10:0] cnt_ =512;
-//reg sign = 0;
-///counter for read_en
-//always @(posedge clk)
-//begin
-//	if(rd_data_count > 520)
-//		sign <= 1;
-//	if(cnt_ < 1)
-//			begin
-//			sign <= 0;
-//			cnt_ <= 512;
-//			end
-//	if(sign == 1)
-//	cnt_ <= cnt_ - 1;
-//end
-//		
 wire [10:0] rd_data_count;  
 
 
@@ -109,20 +71,6 @@ fifo our_fifo(
 	
  
 
- 
-//ram
-//ram ram_out (
-//  .clka(clk), // input clka
-//  .wea(0), // input [0 : 0] wea
-//  .addra(pixel_x), // input [8 : 0] addra
-//  .dina(dina), // input [9 : 0] dina
-//  .douta(douta) // output [9 : 0] douta
-//);
-
-
-//fft
-//assign start = rd_data_count > 600;
-
 reg done_fft;
 reg [9:0]norm2;
 reg [8 : 0] addr_in_ram;
@@ -131,7 +79,9 @@ wire [7 : 0] xk_re;
 wire [7 : 0] xk_im;
 wire [7 : 0] xn_re;
 wire [8 : 0] xk_index;
-wire [7 : 0] doutb;
+wire [7 : 0] doutb1;
+wire [7 : 0] doutb2;
+reg [7 : 0] doutb;
 reg [9:0] cnt_fifo = 0; 
 
 reg start =0;
@@ -180,20 +130,9 @@ always @(posedge clk)
 				ce <= 0;
 			end
 	end
-//		if(rd_en == 1)
-//			begin
-//			if(cnt_fifo == 512)
-//			begin
-//			rd_en <= 0;
-//			cnt_fifo <= 0;
-//			end
-//			else
-//			cnt_fifo <= cnt_fifo + 1;
-//			end
-//
-//		if (xk_index == 511)
-//			ce <= 0;
-//	end
+
+
+
 	
 reg unload=1'b1;	
 reg [17:0] scale_sch=18;	
@@ -222,14 +161,9 @@ fft our_fft (
 wire [16:0] data_fft;
 assign data_fft = (xk_re * xk_re) + (xk_im * xk_im);
 
-//addd koanm badesh
-//always @(posedge clk)
-//begin
-//	done_fft <= dv;
-//	norm2 <= ((xk_re * xk_re) + (xk_im * xk_im));
-//	addr_in_ram <= xk_index;
-//end
-//
+
+
+
 reg [9:0]add_ram=0;
 
 ram our_ram (
@@ -242,9 +176,29 @@ ram our_ram (
   .web(1'b0), // input [0 : 0] web
   .addrb(add_ram), // input [8 : 0] addrb
   .dinb(), // input [7 : 0] dinb
-  .doutb(doutb) // output [7 : 0] doutb
+  .doutb(doutb1) // output [7 : 0] doutb
 );
 
+ram main_sig(
+  .clka(clk), // input clka
+  .wea(rd_en), // input [0 : 0] wea
+  .addra(cnt_fifo), // input [8 : 0] addra
+  .dina(dout_fifo), // input [7 : 0] dina
+  .douta(), // output [7 : 0] douta
+  .clkb(clk), // input clkb
+  .web(1'b0), // input [0 : 0] web
+  .addrb(add_ram), // input [8 : 0] addrb
+  .dinb(), // input [7 : 0] dinb
+  .doutb(doutb2) // output [7 : 0] doutb
+);
+
+always @(posedge clk)
+	begin
+		if(ch == 1)
+			doutb <= doutb1;
+		else
+			doutb <= doutb2;
+	end
 
 ///vga
 	
@@ -265,18 +219,29 @@ always@(posedge clk)
 begin
 if(videoon)begin
 		if(pixel_x > 64 && pixel_x < 576)
-		begin
-			add_ram <= pixel_x - 64;
-			if(pixel_y > 480-doutb)
-				rgb <= sw;
-			else 
-				rgb <= ~sw;
-		end
-		else
-			begin
-				add_ram <= 0;
-				rgb <= sw;
-			end
+			if(pixel_y > 430)
+				begin
+						add_ram <= pixel_x - 64;
+						if(pixel_y > 480-doutb)
+							rgb <= sw;
+						else 
+							rgb <= ~sw;
+					
+				end
+			else
+				begin 
+						add_ram <= pixel_x - 64;
+						if(pixel_y > 480-doutb)
+							rgb <= ~sw;
+						else 
+							rgb <= sw;
+				end
+
+			else
+				begin
+					add_ram <= 0;
+					rgb <= sw;
+				end
 end
 else 
 	rgb <= 6'b0;

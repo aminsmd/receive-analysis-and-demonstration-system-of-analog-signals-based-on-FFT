@@ -148,7 +148,6 @@ case(RxD_state)
 	4'b1101: if(sampleNow) RxD_state <= 4'b1110;  // bit 5
 	4'b1110: if(sampleNow) RxD_state <= 4'b1111;  // bit 6
 	4'b1111: if(sampleNow) RxD_state <= 4'b0010;  // bit 7
-
 	4'b0010: if(sampleNow) RxD_state <= 4'b0000;  // stop bit
 	default: RxD_state <= 4'b0000;
 endcase
@@ -167,8 +166,7 @@ end
 assign RxD_idle = 0;
 `else
 reg [l2o+1:0] GapCnt = 0;
-always @(posedge clk) if (RxD_state!=0) GapCnt<=0; else if(
-amplingTick & ~GapCnt[log2(Oversampling)+1]) GapCnt <= GapCnt + 1'h1;
+always @(posedge clk) if (RxD_state!=0) GapCnt<=0; else if(OversamplingTick & ~GapCnt[log2(Oversampling)+1]) GapCnt <= GapCnt + 1'h1;
 assign RxD_idle = GapCnt[l2o+1];
 always @(posedge clk) RxD_endofpacket <= OversamplingTick & ~GapCnt[l2o+1] & &GapCnt[l2o:0];
 `endif
